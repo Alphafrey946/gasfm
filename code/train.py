@@ -129,12 +129,14 @@ def epoch_train(conf, device, train_loader, model, loss_func, optimizer, schedul
         assert len(curr_lr) == 1
         curr_lr = curr_lr[0]
         tb_log_train_step(tb_writer, prev_n_batches+batch_idx, 'learning_rate', curr_lr, phase, additional_identifiers=additional_identifiers, scene=scene)
-
+        #print(batch_loss)
+        
         if batch_loss.item()>0:
             batch_loss.backward()
-
+            #for p in model.parameters():
+            #    print(p.grad)
             # Log gradient magnitude
-            grad = torch.cat([ p.grad.flatten() for p in model.parameters() ], dim=0)
+            grad = torch.cat([ p.grad.flatten() for p in model.parameters() if p.grad is not None], dim=0)
             grad_norm = grad.norm()
             tb_log_train_step(tb_writer, prev_n_batches+batch_idx, 'grad_norm', grad_norm, phase, additional_identifiers=additional_identifiers, scene=scene)
 
@@ -573,7 +575,7 @@ def train(conf, device, train_loader, model, phase, train_loader_for_eval=None, 
             else:
                 # Not in sequential mode - keep dataloader unchanged.
                 curr_train_loader = train_loader
-
+        #print(model)
         mean_train_loss, train_losses, n_batches = epoch_train(conf, device, curr_train_loader, model, loss_func, optimizer, scheduler, epoch, phase, tb_writer, additional_identifiers=additional_identifiers+get_additional_identifiers_for_outlier_injection(outlier_injection_rate), scene=scene, prev_n_batches=total_n_batches, tb_log_train_per_scene=tb_log_train_per_scene if phase==Phases.TRAINING else None)
         total_n_batches += n_batches
 

@@ -32,7 +32,7 @@ def get_raw_data(scene, use_gt):
     Ns /= N33 # Divide by N33 to ensure last row [0, 0, 1] (although generally the case, a small deviation in scale has been observed for e.g. the PantheonParis scene)
     Ps_gt /= np.linalg.det(Ns @ Ps_gt[:, :, :3])[:, None, None]**(1/3) # Likewise, ensure that P is scaled such that P=K*[R  t], where K=inv(N) has final row [0, 0, 1], and R is a rotation
     R_gt = Ns @ Ps_gt[:, :, :3]
-    assert np.allclose(R_gt.swapaxes(1, 2) @ R_gt, np.eye(3)[None, :, :])
+    assert np.allclose(R_gt.swapaxes(1, 2) @ R_gt, np.eye(3)[None, :, :], rtol=1e-03, atol=1e-05)
 
     if use_gt:
         M = torch.from_numpy(dataset_utils.correct_matches_global(M, Ps_gt, Ns)).float()

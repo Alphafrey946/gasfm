@@ -3,7 +3,7 @@ from utils import geo_utils
 from torch import nn
 from torch.nn import functional as F
 import loss_functions
-
+import pytorch3d
 
 def get_loss_func(conf):
     loss_func_spec = conf.get_string('loss.func')
@@ -120,6 +120,7 @@ class ESFMLoss(nn.Module):
 
         # NOTE: Use either the reprojection error or the negative depth loss, depending on whether the depth is valid or not.
         assert data.valid_pts.is_cuda # If not, we would have to modify the masking below, to avoid an implicit call to pytorch's buggy CPU-implementation of nonzero.
+        print(torch.where(positive_projected_pts_mask, reproj_err, hinge_loss)[data.valid_pts].mean())
         return torch.where(positive_projected_pts_mask, reproj_err, hinge_loss)[data.valid_pts].mean()
 
 
@@ -160,12 +161,14 @@ class GTLoss(nn.Module):
     def forward(self, pred_dict, data, epoch=None):
         # Get orientation
         Vs_gt = data.y[:, 0:3, 0:3].inverse().transpose(1, 2)
+        #Vs_gt = 
         if self.calibrated:
-            Rs_gt = geo_utils.rot_to_quat(torch.bmm(data.Ns_invT, Vs_gt).transpose(1, 2))
-
+            #Rs_gt = geo_utils.rot_to_quat(torch.bmm(data.Ns_invT, Vs_gt).transpose(1, 2))
+            Rs_gt = pytorch3d.transforms.matrix_to_quaternion(torch.bmm(data.Ns_invT, Vs_gt).transpose(1, 2))
+	
         # Get Location
         t_gt = -torch.bmm(data.y[:, 0:3, 0:3].inverse(), data.y[:, 0:3, 3].unsqueeze(-1)).squeeze()
-
+	#t_gt = data.y[:, 0:3, 3]
         # Normalize scene by points
         # trans = pts3D_gt.mean(dim=1)
         # scale = (pts3D_gt - trans.unsqueeze(1)).norm(p=2, dim=0).mean()
@@ -179,14 +182,15 @@ class GTLoss(nn.Module):
 
         Vs_invT = pred_dict["Ps_norm"][:, 0:3, 0:3]
         Vs = torch.inverse(Vs_invT).transpose(1, 2)
-        ts = torch.bmm(-Vs.transpose(1, 2), pred_dict["Ps"][:, 0:3, 3].unsqueeze(dim=-1)).squeeze()
+        ts = torch.bmm(-Vs.transpose(1, 2), pred_dict["Ps_norm"][:, 0:3, 3].unsqueeze(dim=-1)).squeeze()
 
         # Translation error
         translation_err = (t_gt - ts).norm(p=2, dim=1)
 
         # Calculate error
         if self.calibrated:
-            Rs = geo_utils.rot_to_quat(torch.bmm(data.Ns_invT, Vs).transpose(1, 2))
+            #Rs = geo_utils.rot_to_quat(torch.bmm(data.Ns_invT, Vs).transpose(1, 2))
+            Rs = pytorch3d.transforms.matrix_to_quaternion(torch.bmm(data.Ns_invT, Vs).transpose(1, 2))
             orient_err = (Rs - Rs_gt).norm(p=2, dim=1)
         else:
             Vs_gt = Vs_gt / Vs_gt.norm(p='fro', dim=(1, 2), keepdim=True)
@@ -200,6 +204,6 @@ class GTLoss(nn.Module):
         if epoch is not None and epoch % 1000 == 0:
             # Print loss
             print("loss = {}, orient err = {}, trans err = {}".format(loss, orient_loss, tran_loss))
-
+        #print(loss)
         return loss
 
