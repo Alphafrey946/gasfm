@@ -1,7 +1,8 @@
 import torch
 import os
 from time import time
-from utils import geo_utils, ba_functions
+#from utils import geo_utils, ba_functions
+from utils import geo_utils
 import numpy as np
 
 
@@ -131,11 +132,12 @@ def prepare_predictions(data, pred_dict, conf, bundle_adjustment):
     Ps_norm = pred_dict['Ps_norm'].detach().cpu().numpy()  # Normalized camera!!
     Ps = Ns_inv @ Ps_norm  # unnormalized cameras
     pts3D_pred = geo_utils.pflat(pred_dict['pts3D']).detach().cpu().numpy()
-
+    print("pts3D_pred",pts3D_pred.shape)
     # NOTE: Here we carry out a DLT triangulation (algebraic error minimization...).
     # This triangulation may be different from the initial one optionally performed by Ceres before BA below.
     try:
         pts3D_triangulated = geo_utils.n_view_triangulation(Ps, M=M, Ns=Ns)
+        print("pts3D_triangulated",pts3D_triangulated.shape)
     except np.linalg.LinAlgError as e:
         # Triangulation may fail due to poor conditioning of the M matrix if the predicted poses are totally off.
         # In this case, we should handle this gracefully rather than crashing.
@@ -167,9 +169,11 @@ def prepare_predictions(data, pred_dict, conf, bundle_adjustment):
         Rs_fixed, ts_fixed, similarity_mat = geo_utils.align_cameras(Rs_pred, Rs_gt, ts_pred, ts_gt, return_alignment=True) # Align  Rs_fixed, tx_fixed
         outputs['Rs_fixed'] = Rs_fixed
         outputs['ts_fixed'] = ts_fixed
-        outputs['pts3D_pred_fixed'] = (similarity_mat @ pts3D_pred)  # 4,n
-        outputs['pts3D_triangulated_fixed'] = None if pts3D_triangulated is None else (similarity_mat @ pts3D_triangulated)
-
+        #outputs['pts3D_pred_fixed'] = (similarity_mat @ pts3D_pred)  # 4,n
+        #outputs['pts3D_triangulated_fixed'] = None if pts3D_triangulated is None else (similarity_mat @ pts3D_triangulated)
+        outputs['pts3D_pred_fixed'] =  pts3D_pred # 4,n
+        outputs['pts3D_triangulated_fixed'] = None if pts3D_triangulated is None else pts3D_triangulated
+        '''
         if bundle_adjustment:
             repeat = conf.get_bool('ba.repeat')
             triangulation = conf.get_bool('ba.triangulation')
@@ -178,9 +182,9 @@ def prepare_predictions(data, pred_dict, conf, bundle_adjustment):
             # NOTE however, that if triangulation = True, this is effectively replaced by a DLT triangulation.
             # Optionally, if repeat = True, a second BA is performed based on a new (!!) DLT triangulation given the resulting cameras from the first one.
             begin_time = time()
-            ba_res = ba_functions.euc_ba(xs, Rs=Rs_pred, ts=ts_pred, Ks=np.linalg.inv(Ns),
-                                         Xs_our=pts3D_pred.T, Ps=None,
-                                         Ns=Ns, repeat=repeat, triangulation=triangulation, return_repro=True, print_out=print_out) #    Rs, ts, Ps, Xs
+            #ba_res = ba_functions.euc_ba(xs, Rs=Rs_pred, ts=ts_pred, Ks=np.linalg.inv(Ns),
+            #                             Xs_our=pts3D_pred.T, Ps=None,
+            #                             Ns=Ns, repeat=repeat, triangulation=triangulation, return_repro=True, print_out=print_out) #    Rs, ts, Ps, Xs
             ba_time = time() - begin_time
             outputs['ba_time'] = ba_time
             outputs['Rs_ba'] = ba_res['Rs']
@@ -200,9 +204,10 @@ def prepare_predictions(data, pred_dict, conf, bundle_adjustment):
             outputs['Rs_ba_fixed'] = R_ba_fixed
             outputs['ts_ba_fixed'] = t_ba_fixed
             outputs['Xs_ba_fixed'] = (similarity_mat @ outputs['Xs_ba'])
-
+        '''
     else:
         # TODO: Is it feasible to align perspective cameras similar to the calibrated case above? (Searching for a projective rather than similarity transformation)
+        '''
         if bundle_adjustment:
             repeat = conf.get_bool('ba.repeat')
             triangulation = conf.get_bool('ba.triangulation')
@@ -221,7 +226,7 @@ def prepare_predictions(data, pred_dict, conf, bundle_adjustment):
                 outputs['repro_ba_middle_triangulated'] = ba_res['repro_middle_triangulated']
                 outputs['repro_ba_after'] = ba_res['repro_after']
                 outputs['ba_converged2'] = ba_res['converged2']
-
+        '''
     return outputs
 
 
@@ -306,12 +311,13 @@ def compute_errors(outputs, conf, bundle_adjustment):
     Ps = outputs['Ps']
     pts3D_pred = outputs['pts3D_pred']
     pts3D_triangulated = outputs['pts3D_triangulated']
-
+    #print(pts3D_pred.shape)
     model_errors["our_repro"] = np.nanmean(geo_utils.reprojection_error_with_points(Ps, pts3D_pred.T, xs))
-    model_errors["triangulated_repro"] = np.nan if pts3D_triangulated is None else np.nanmean(geo_utils.reprojection_error_with_points(Ps, pts3D_triangulated.T, xs))
+    #model_errors["triangulated_repro"] = np.nan if pts3D_triangulated is None else np.nanmean(geo_utils.reprojection_error_with_points(Ps, pts3D_triangulated.T, xs))
+    model_errors["triangulated_repro"] = np.nan
     if calibrated:
-        Rs_fixed = outputs['Rs_fixed']
-        ts_fixed = outputs['ts_fixed']
+        Rs_fixed = outputs['Rs']
+        ts_fixed = outputs['ts']
         Rs_gt = outputs['Rs_gt']
         ts_gt = outputs['ts_gt']
         Rs_error, ts_error = geo_utils.tranlsation_rotation_errors(Rs_fixed, ts_fixed, Rs_gt, ts_gt)

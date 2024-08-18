@@ -54,7 +54,7 @@ def epoch_train(conf, device, train_loader, model, loss_func, optimizer, schedul
     scenepoint_head_enabled = conf.get_bool('model.scenepoint_head.enabled')
     explicit_est_avail = view_head_enabled and scenepoint_head_enabled
     calc_reprojerr_with_gtposes_for_depth_pred = conf.get_bool('eval.calc_reprojerr_with_gtposes_for_depth_pred')
-
+    GTLoss = loss_functions.GTLoss(conf)
     model.train()
     train_losses = []
     for batch_idx, train_batch in enumerate(train_loader):  # Loop over all sets - 30
@@ -84,7 +84,16 @@ def epoch_train(conf, device, train_loader, model, loss_func, optimizer, schedul
                 print(curr_data.device)
                 print(curr_data.valid_pts.device)
                 assert False, 'Unexpected CUDA device'
+            '''
+            if len( loss_func)==1:
+                loss = loss_func(pred_dict, curr_data)
+            else:
+                loss = loss_func[0](pred_dict, curr_data)
+                for i in range(1,len(loss_func)):
+                    loss+=loss_func[i](pred_dict, curr_data)
+            '''
             loss = loss_func(pred_dict, curr_data)
+            loss+= GTLoss(pred_dict, curr_data)
             batch_loss += loss
             train_losses.append(loss.item())
 
@@ -217,6 +226,9 @@ def epoch_evaluation(data_loader, model, conf, device, epoch, phase, outlier_inj
                     if epoch is None:
                         stats = dataset_utils.get_data_statistics(curr_data)
                         errors.update(stats)
+                    if epoch % 100 ==0:
+                        print("print_plot")
+                        path = plot_utils.plot_cameras_before_and_after_ba(outputs, errors, conf, phase, scene=curr_data.scene_name, epoch=epoch, bundle_adjustment=bundle_adjustment, additional_identifiers=additional_identifiers)
 
                     if dump_and_plot_predictions:
                         dataset_utils.dump_predictions(outputs, conf, curr_epoch=epoch, phase=phase, additional_identifiers=additional_identifiers)
@@ -432,7 +444,6 @@ def train(conf, device, train_loader, model, phase, train_loader_for_eval=None, 
 
     # Loss functions
     loss_func = loss_functions.get_loss_func(conf)
-
     # Optimizer params
     lr = conf.get_float('train.lr')
 
@@ -529,7 +540,7 @@ def train(conf, device, train_loader, model, phase, train_loader_for_eval=None, 
                 train_errors = epoch_evaluation(train_loader_for_eval, model, conf, device, epoch, phase, outlier_injection_rate=None, dump_and_plot_predictions=dump_and_plot_predictions, additional_identifiers=additional_identifiers, bundle_adjustment=ba_during_training, log_memory_consumption=stdout_log_eval_memory_consumption, crash_on_scene_exhausting_memory=True)
                 tb_log_eval_step(conf, tb_writer, epoch, train_errors, phase=phase, additional_identifiers=additional_identifiers, scene=scene, include_post_ba_metrics=ba_during_training)
 
-        if phase == Phases.TRAINING and validation_metric is not None:
+        if phase == Phases.TRAINING  and validation_metric is not None:
             metric = aggregate_val_metric(validation_errors, metric_column=validation_metric)
 
             if metric < best_validation_metric:
@@ -649,7 +660,10 @@ def train(conf, device, train_loader, model, phase, train_loader_for_eval=None, 
                     best_model = copy.deepcopy(model)
                     best_model.cpu() # No need to store these checkpoint parameters on GPU throughout the training.
                     print('Updated best validation metric: {} time so far: {}'.format(best_validation_metric, converge_time))
-
+            if phase == Phases.OPTIMIZATION:
+                print('save single opt')
+                path = os.path.join(path_utils.path_to_models_dir(conf, phase, additional_identifiers=additional_identifiers), 'best_model.pt')
+                torch.save(model.state_dict(), path)
             if any([
                 finetune_dump_model_interval is not None and (epoch+1) % finetune_dump_model_interval == 0,
                 phase == Phases.TRAINING and validation_metric is not None and epoch == best_epoch,

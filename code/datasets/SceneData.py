@@ -52,8 +52,8 @@ class SceneData:
         self.valid_pts = dataset_utils.get_M_valid_points(self.M)
 
         # Normalize M
-        self._norm_M = geo_utils.normalize_M(self.M, self.Ns, self.valid_pts).transpose(1, 2).reshape(n_images * 2, -1)
-
+        #self._norm_M = geo_utils.normalize_M(self.M, self.Ns, self.valid_pts).transpose(1, 2).reshape(n_images * 2, -1)
+        self._norm_M = geo_utils.normalize_M(self.M, self.Ns, self.valid_pts)
         # Triangulate scenepoints and store a target depths for prediction (at a normalized scale)
         if self.store_depth_targets:
             valid_pts_idx = nonzero_safe(self.valid_pts)

@@ -33,11 +33,19 @@ def get_raw_data(scene, use_gt):
     Ps_gt /= np.linalg.det(Ns @ Ps_gt[:, :, :3])[:, None, None]**(1/3) # Likewise, ensure that P is scaled such that P=K*[R  t], where K=inv(N) has final row [0, 0, 1], and R is a rotation
     R_gt = Ns @ Ps_gt[:, :, :3]
     assert np.allclose(R_gt.swapaxes(1, 2) @ R_gt, np.eye(3)[None, :, :], rtol=1e-03, atol=1e-05)
-
+    #print(M)
+    xs = geo_utils.M_to_xs(M)
+    #xs[:,:,0]/=640
+    #xs[:,:,1]/=480
+    X=geo_utils.convert_ptcloud_zero(Ps_gt, xs)
+    #M = geo_utils.xs_to_M((Ps_gt @ X.T).transpose(0,2,1)[:,:,:2])
+    M = geo_utils.xs_to_M(xs[:,:,:2])
     if use_gt:
         M = torch.from_numpy(dataset_utils.correct_matches_global(M, Ps_gt, Ns)).float()
-
-    M = torch.from_numpy(M).float()
+        #M = torch.from_numpy(M).float()
+    else:
+        M = torch.from_numpy(M).float()
+    print("M",M.shape)
     Ps_gt = torch.from_numpy(Ps_gt).float()
     Ns = torch.from_numpy(Ns).float()
 

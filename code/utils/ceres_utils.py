@@ -1,7 +1,7 @@
 import sys
-sys.path.append("../bundle_adjustment/ceres-solver/ceres-bin/lib/") # so
+#sys.path.append("../bundle_adjustment/ceres-solver/ceres-bin/lib/") # so
 
-import PyCeres
+#import PyCeres
 import numpy as np
 import scipy.io as sio
 import cv2

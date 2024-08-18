@@ -18,6 +18,34 @@ def get_loss_func(conf):
     else:
         assert False, "Unknown loss function: {}.".format(loss_func_spec)
     loss_func = getattr(loss_functions, loss_func_spec)(conf)
+    '''
+    if len(loss_func_spec) ==1:
+        if loss_func_spec in ['ESFMLoss', 'ExpDepthRegularizedOSELoss', 'GTLoss']:
+            assert conf.get_bool('model.view_head.enabled')
+            assert conf.get_bool('model.scenepoint_head.enabled')
+            assert not conf.get_bool('model.depth_head.enabled'), "Make sure that model.depth_head.enabled=False, if there is no loss applied on such output."
+        elif loss_func_spec == 'DirectDepthLoss':
+            assert conf.get_bool('model.depth_head.enabled')
+            assert not conf.get_bool('model.view_head.enabled'), "Make sure that model.view_head.enabled=False, if there is no loss applied on such output."
+            assert not conf.get_bool('model.scenepoint_head.enabled'), "Make sure that model.scenepoint_head.enabled=False, if there is no loss applied on such output."
+        else:
+            assert False, "Unknown loss function: {}.".format(loss_func_spec)
+        loss_func = getattr(loss_functions, loss_func_spec)(conf)
+    else:
+        if loss_func_spec in ['ESFMLoss', 'ExpDepthRegularizedOSELoss', 'GTLoss']:
+            assert conf.get_bool('model.view_head.enabled')
+            assert conf.get_bool('model.scenepoint_head.enabled')
+            assert not conf.get_bool('model.depth_head.enabled'), "Make sure that model.depth_head.enabled=False, if there is no loss applied on such output."
+        elif loss_func_spec == 'DirectDepthLoss':
+            assert conf.get_bool('model.depth_head.enabled')
+            assert not conf.get_bool('model.view_head.enabled'), "Make sure that model.view_head.enabled=False, if there is no loss applied on such output."
+            assert not conf.get_bool('model.scenepoint_head.enabled'), "Make sure that model.scenepoint_head.enabled=False, if there is no loss applied on such output."
+        else:
+            assert False, "Unknown loss function: {}.".format(loss_func_spec)
+        loss_func = []
+        for i in range(len(loss_func_spec)):
+            loss_func.append(getattr(loss_functions, loss_func_spec[i])(conf))
+    '''
     return loss_func
 
 
@@ -87,7 +115,13 @@ class ESFMLoss(nn.Module):
         # Consequently, the reprojection error itself is calculated in normalized image space.
         # In the Euclidean setting, N=inv(K).
         Ps = pred_dict["Ps_norm"]
-        pts_2d = Ps @ pred_dict["pts3D"]  # [m, 3, n]
+        #n_ = int(pred_dict["pts3D"].shape[0]/Ps.shape[0])
+        #pts_2d = pred_dict["pts3D"].view(Ps_gt.shape[0],n_,4)
+        #pts_2d = Ps@ torch.permute(pts_2d, (0,2,1))
+        pts_2d = Ps @ pred_dict["pts3D"]
+        pts_2d.retain_grad()
+
+        #pts_2d = Ps @ pred_dict["pts3D"]  # [m, 3, n]
 
         # Get point for reprojection loss
         if self.hinge_loss:
@@ -116,7 +150,15 @@ class ESFMLoss(nn.Module):
         # Calculate reprojection error
         # NOTE: While at this point reprojection errors are computed for all points, only the points with valid depths will be used in the end.
         pts_2d = (pts_2d / torch.where(positive_projected_pts_mask, pts_2d[:, 2, :], torch.ones_like(positive_projected_pts_mask).float()).unsqueeze(dim=1))
-        reproj_err = (pts_2d[:, 0:2, :] - data.norm_M.reshape(Ps.shape[0], 2, -1)).norm(dim=1)
+        #reproj_err = (pts_2d[:, 0:2, :] - data.norm_M.reshape(Ps.shape[0], 2, -1)).norm(dim=1)
+        #print(data.norm_M.shape)
+        print(data.norm_M.permute(0, 2, 1)[0,:2,0],pts_2d[0, 0:2, 0])
+        reproj_err = (pts_2d[:, 0:2, :] - data.norm_M.permute(0, 2, 1)[:,:2,:]).norm(dim=1)
+        print(data.norm_M.permute(0, 2, 1)[0,:2,0],pts_2d[0, 0:2, 0],reproj_err[0], )
+        print(pts_2d[:, 0:2, :].shape,data.norm_M.permute(0, 2, 1)[:,:2,:].shape)
+        print(Ps[0,:,:])
+
+        #https://github.com/google-research-datasets/Objectron/issues/14
 
         # NOTE: Use either the reprojection error or the negative depth loss, depending on whether the depth is valid or not.
         assert data.valid_pts.is_cuda # If not, we would have to modify the masking below, to avoid an implicit call to pytorch's buggy CPU-implementation of nonzero.
@@ -168,7 +210,7 @@ class GTLoss(nn.Module):
 	
         # Get Location
         t_gt = -torch.bmm(data.y[:, 0:3, 0:3].inverse(), data.y[:, 0:3, 3].unsqueeze(-1)).squeeze()
-	#t_gt = data.y[:, 0:3, 3]
+	    #t_gt = data.y[:, 0:3, 3]
         # Normalize scene by points
         # trans = pts3D_gt.mean(dim=1)
         # scale = (pts3D_gt - trans.unsqueeze(1)).norm(p=2, dim=0).mean()
@@ -183,7 +225,7 @@ class GTLoss(nn.Module):
         Vs_invT = pred_dict["Ps_norm"][:, 0:3, 0:3]
         Vs = torch.inverse(Vs_invT).transpose(1, 2)
         ts = torch.bmm(-Vs.transpose(1, 2), pred_dict["Ps_norm"][:, 0:3, 3].unsqueeze(dim=-1)).squeeze()
-
+        print(ts[0], t_gt[0])
         # Translation error
         translation_err = (t_gt - ts).norm(p=2, dim=1)
 
@@ -192,6 +234,7 @@ class GTLoss(nn.Module):
             #Rs = geo_utils.rot_to_quat(torch.bmm(data.Ns_invT, Vs).transpose(1, 2))
             Rs = pytorch3d.transforms.matrix_to_quaternion(torch.bmm(data.Ns_invT, Vs).transpose(1, 2))
             orient_err = (Rs - Rs_gt).norm(p=2, dim=1)
+            print(Rs[0],Rs_gt[0])
         else:
             Vs_gt = Vs_gt / Vs_gt.norm(p='fro', dim=(1, 2), keepdim=True)
             Vs = Vs / Vs.norm(p='fro', dim=(1, 2), keepdim=True)

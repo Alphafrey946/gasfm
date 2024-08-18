@@ -376,17 +376,25 @@ def reprojection_error_with_points(Ps, Xs, xs, visible_points=None):
     :return: errors [m,n]
     """
     m,n,d = xs.shape
-    _, D = Xs.shape
-    X4 = np.concatenate([Xs, np.ones([n,1])], axis=1) if D == 3 else Xs
+    n_, D = Xs.shape
+    print("Xs shape", Xs.shape)
+    #X4 = np.concatenate([Xs, np.ones([n,1])], axis=1) if D == 3 else Xs
 
     if visible_points is None:
         visible_points = xs_valid_points(xs)
-
-    projected_points = Ps @ X4.T  # [m,3,4] @ [4,n] -> [m,3,n]
+    
+    #n_ = int(n_/Ps.shape[0])
+    #projected_points = Ps @ Xs.reshape(Ps.shape[0],n_,4).transpose(0,2,1)
+    #visible_points_idx = nonzero_safe(visible_points)
+    #projected_points[visible_points_idx[0], visible_points_idx[1], :] = projected_points[visible_points_idx[0], visible_points_idx[1], :] / projected_points[visible_points_idx[0], visible_points_idx[1], -1][:, None]
+    #errors = np.linalg.norm(xs[:,:,:2] - projected_points[:,:,:2], axis=2)
+    
+    projected_points = Ps @ Xs  # [m,4,4] @ [4,n] -> [m,4,n]
     projected_points = projected_points.swapaxes(1, 2)
     visible_points_idx = nonzero_safe(visible_points)
     projected_points[visible_points_idx[0], visible_points_idx[1], :] = projected_points[visible_points_idx[0], visible_points_idx[1], :] / projected_points[visible_points_idx[0], visible_points_idx[1], -1][:, None]
-    errors = np.linalg.norm(xs[:,:,:2] - projected_points[:,:,:2], axis=2)
+    errors = np.linalg.norm(xs.transpose(0,2,1)[:,:2,:] - projected_points[:,:2,:], axis=2)
+    
     errors[~visible_points] = np.nan
     return errors
 
@@ -667,10 +675,63 @@ def n_view_triangulation(Ps, M, Ns=None, return_V_H=False):
     if return_V_H:
         X, V_H = dlt_triangulation(Ps, xs, visible_points, return_V_H=return_V_H)
         return X.T, V_H
-    X = dlt_triangulation(Ps, xs, visible_points)
+    #X = dlt_triangulation(Ps, xs, visible_points)
+    #X,xs_list = convert_ptcloud(Ps,xs)
+    X = convert_ptcloud_zero(Ps,xs)
     return X.T
 
+def convert_ptcloud(Ps, xs, num_pts = 40):
+    xs_m, x_n, x_d = xs.shape
+    X = np.ones((xs_m * num_pts, 4))
+    xs_list = []
+    zero_flag = False
+    Ps = np.concatenate([Ps, np.zeros((Ps.shape[0],1,4))],axis=1)
+    Ps[:,3,3]=1
+    #print(Ps.shape)
+    for i in range(1,xs_m+1):
+      xs_temp = xs[(i-1),:,:]
+      xs_temp_nonzero = xs_temp[xs_temp !=0]
+      xs_temp_ = xs_temp_nonzero.reshape(-1,2)[:num_pts,:] if xs_temp[xs_temp !=0].shape[0] % 2 == 0 else xs_temp_nonzero[:-1].reshape(-1,2)[:num_pts,:]
+      #print(xs_temp_.shape)
+      xs_3_temp = np.concatenate([xs_temp_, np.zeros([num_pts, 1])], axis=1) if xs_temp_.shape[0] == num_pts else  np.concatenate([xs_temp_, np.zeros([xs_temp_.shape[0], 1])], axis=1)
+      #xs_3_temp = np.concatenate([xs_temp_, np.ones([num_pts, 1])], axis=1) if xs_temp_.shape[0] == num_pts else  np.concatenate([xs_temp_, np.ones([xs_temp_.shape[0], 1])], axis=1)
+      if xs_3_temp.shape[0] == num_pts:
+        X[(i-1) * num_pts: i *num_pts,:3] = xs_3_temp
+        #print(X[(i-1) * num_pts: i *num_pts,:].shape)
+        #print(X[(i-1) * num_pts: i *num_pts,:].T.shape)
+        for j in range(num_pts):
+          X[(i-1)*num_pts+j,:] = np.linalg.inv(Ps[(i-1),:,:]) @  X[(i-1)*num_pts +j,:]
+        xs_list.append(xs_3_temp)
+        zero_flag = False
+      else:
+        sx_3_temp_wzero = np.concatenate([xs_3_temp, np.zeros([num_pts - xs_3_temp.shape[0], 3])], axis=0)
+        X[(i-1) * num_pts: i *num_pts,:3] = sx_3_temp_wzero
+        #print(X[(i-1) * num_pts: i *num_pts,:].T.shape)
+        for j in range(num_pts):
+          X[(i-1)*num_pts+j,:] = np.linalg.inv(Ps[(i-1),:,:]) @  X[(i-1)*num_pts +j,:]
+        xs_list.append(sx_3_temp_wzero)
+        zero_flag = True
+    #if zero_flag:
 
+      #X = X[X!=0].reshape(xs_m * num_pts,4)
+
+
+    return X,np.array(xs_list)
+
+def convert_ptcloud_zero(Ps, xs):
+    xs_m, x_n, x_d = xs.shape
+    X = np.zeros((xs_m ,  4,x_n))
+    xs_list = []
+    zero_flag = False
+    Ps = np.concatenate([Ps, np.zeros((Ps.shape[0],1,4))],axis=1)
+    Ps[:,3,3]=1
+    #print(Ps.shape)
+    for i in range(xs_m):
+      x_temp = np.concatenate([xs[i,:,:], np.ones([x_n, 2])],axis=1)
+      X[i,:,:] = np.linalg.inv(Ps[i,:,:]) @ x_temp.T
+
+
+    return X
 def xs_valid_points(xs):
     """
 

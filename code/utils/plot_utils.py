@@ -131,7 +131,12 @@ def plot_cameras_before_and_after_ba(outputs, errors, conf, phase, scene, epoch=
     Rs_error = errors['R_err_mean']
     ts_error = errors['t_err_mean']
     plot_cameras(Rs_pred, ts_pred, pts3D, Rs_gt, ts_gt, Rs_error, ts_error, conf, phase, scene=scene, epoch=epoch, additional_identifiers=additional_identifiers)
-
+    Rs_pred = outputs['Rs_fixed']
+    ts_pred = outputs['ts_fixed']
+    pts3D = outputs['pts3D_triangulated_fixed'][:3,:]
+    Rs_error = errors['R_err_mean']
+    ts_error = errors['t_err_mean']
+    plot_cameras(Rs_pred, ts_pred, pts3D, Rs_gt, ts_gt, Rs_error, ts_error, conf, phase, scene=scene+'_ba', epoch=epoch)
     if bundle_adjustment:
         Rs_pred = outputs['Rs_ba_fixed']
         ts_pred = outputs['ts_ba_fixed']

@@ -116,6 +116,7 @@ class GraphAttnSfMNet(BaseNet):
 
     def forward(self, data):
         projection_features = data.x  # x is [m,n,d] sparse matrix
+        print("projection_features",projection_features.shape)
         # The graph structure depends on and is retrieved from the scene data:
         graph_structure = data.graph_wrappers
         projection_features = self.embed(projection_features)

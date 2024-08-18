@@ -1,5 +1,5 @@
 import numpy as np
-from utils import ceres_utils
+#from utils import ceres_utils
 from utils import geo_utils
 
 
@@ -41,7 +41,7 @@ def euc_ba(xs, Rs, ts, Ks, Xs_our=None, Ps=None, Ns=None, repeat=True, triangula
     if return_repro:
         results['repro_before'] = np.nanmean(geo_utils.reprojection_error_with_points(Ps, Xs, xs, visible_points))
 
-    new_Rs, new_ts, new_Ps, new_Xs, converged = ceres_utils.run_euclidean_python_ceres(Xs, visible_xs, Rs, ts, Ks, point_indices, print_out=print_out)
+    #new_Rs, new_ts, new_Ps, new_Xs, converged = ceres_utils.run_euclidean_python_ceres(Xs, visible_xs, Rs, ts, Ks, point_indices, print_out=print_out)
     results['converged1'] = converged
 
     if repeat:
@@ -57,7 +57,7 @@ def euc_ba(xs, Rs, ts, Ks, Xs_our=None, Ps=None, Ns=None, repeat=True, triangula
             results['repro_middle_triangulated'] = np.nanmean(geo_utils.reprojection_error_with_points(new_Ps, new_Xs, xs, visible_points))
 
         # second ba with triangulated x
-        new_Rs, new_ts, new_Ps, new_Xs, converged = ceres_utils.run_euclidean_python_ceres(new_Xs, visible_xs, new_Rs, new_ts, Ks, point_indices, print_out=print_out)
+        #new_Rs, new_ts, new_Ps, new_Xs, converged = ceres_utils.run_euclidean_python_ceres(new_Xs, visible_xs, new_Rs, new_ts, Ks, point_indices, print_out=print_out)
         results['converged2'] = converged
 
     if return_repro:
@@ -105,7 +105,7 @@ def proj_ba(Ps, xs, Xs_our=None, Ns=None, repeat=True, triangulation=False, retu
     if return_repro:
         results['repro_before'] = np.nanmean(geo_utils.reprojection_error_with_points(Ps, Xs, xs, visible_points))
 
-    new_Ps, new_Xs, converged = ceres_utils.run_projective_python_ceres(Ps, Xs, visible_xs, point_indices, print_out=print_out)
+    #new_Ps, new_Xs, converged = ceres_utils.run_projective_python_ceres(Ps, Xs, visible_xs, point_indices, print_out=print_out)
     results['converged1'] = converged
 
     if repeat:
@@ -123,7 +123,7 @@ def proj_ba(Ps, xs, Xs_our=None, Ns=None, repeat=True, triangulation=False, retu
         if return_repro:
             results['repro_middle_triangulated'] = np.nanmean(geo_utils.reprojection_error_with_points(new_Ps, new_Xs, xs, visible_points))
 
-        new_Ps, new_Xs, converged = ceres_utils.run_projective_python_ceres(new_Ps, new_Xs, visible_xs, point_indices, print_out=print_out)
+        #new_Ps, new_Xs, converged = ceres_utils.run_projective_python_ceres(new_Ps, new_Xs, visible_xs, point_indices, print_out=print_out)
         results['converged2'] = converged
 
     if return_repro:

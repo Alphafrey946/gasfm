@@ -183,7 +183,7 @@ def main():
         pretrained_model_path = os.path.join(path_to_exp_root(conf), models_dir, args.pretrained_model_filename)
         ret = model.load_state_dict(torch.load(pretrained_model_path), strict=False)
         assert all('head' in key or 'final' in key for key in ret.missing_keys)
-        assert all('head' in key or 'final' in key for key in ret.unexpected_keys)
+        #assert all('head' in key or 'final' in key for key in ret.unexpected_keys)
         if len(ret.missing_keys) > 0:
             print('[WARNING] Loaded statedict is missing the following keys:\n{}'.format(ret.missing_keys))
         if len(ret.unexpected_keys) > 0:
